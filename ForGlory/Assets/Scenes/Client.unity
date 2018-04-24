@@ -211,13 +211,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 60626754}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bf856e56fefc2bf4183ab45d8bceb9fa, type: 3}
+  m_Script: {fileID: 11500000, guid: c921911571ce1264ca0e1764aafece30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerPrefab: {fileID: 1100508200623868, guid: cafb95b1ee801664ab699d1789a016dc,
-    type: 2}
-  canvas: {fileID: 1235361495}
-  log: {fileID: 299519848}
+  playerPrefab: {fileID: 0}
+  canvas: {fileID: 0}
+  log: {fileID: 0}
 --- !u!4 &60626756
 Transform:
   m_ObjectHideFlags: 0
@@ -353,7 +352,7 @@ Terrain:
   m_GameObject: {fileID: 362576396}
   m_Enabled: 1
   serializedVersion: 3
-  m_TerrainData: {fileID: 15600000, guid: c787e7eadfc485d4a94d83f7c688808d, type: 2}
+  m_TerrainData: {fileID: 0}
   m_TreeDistance: 5000
   m_TreeBillboardDistance: 50
   m_TreeCrossFadeLength: 5

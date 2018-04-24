@@ -12,9 +12,11 @@ namespace ForGloryDB.Model
         public ForGloryContext(DbContextOptions<ForGloryContext> options) : base(options) { }
         private DbSet<User> user;
         private DbSet<Character> character;
+        private DbSet<Unit> unit;
 
         public DbSet<User> User { get => user; set => user = value; }
         public DbSet<Character> Character { get => character; set => character = value; }
+        public DbSet<Unit> Unit { get => unit; set => unit = value; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -33,6 +35,29 @@ namespace ForGloryDB.Model
                     .IsRequired()
                     .HasColumnName("email")
                     .HasMaxLength(255);
+            });
+
+            modelBuilder.Entity<Unit>(entity =>
+            {
+                entity.ToTable("unit");
+                entity.Property(e => e.Id)
+                    .IsRequired()
+                    .HasColumnName("id")
+                    .HasMaxLength(11);
+                entity.Property(e => e.Level)
+                    .HasColumnName("level")
+                    .HasMaxLength(11);
+                entity.Property(e => e.Type)
+                    .IsRequired()
+                    .HasColumnName("type")
+                    .HasMaxLength(255);
+                entity.Property(e => e.NameCharacter)
+                    .IsRequired()
+                    .HasColumnName("name_character")
+                    .HasMaxLength(255);
+                entity.Property(e => e.InUse)
+                    .HasColumnName("inUse")
+                    .HasMaxLength(4);
             });
 
             modelBuilder.Entity<Character>(entity =>
