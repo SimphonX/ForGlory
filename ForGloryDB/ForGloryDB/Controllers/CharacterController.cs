@@ -12,6 +12,12 @@ namespace ForGloryDB.Controllers
     [Route("api/[controller]")]
     public class CharacterController : Controller
     {
+        public class Stats
+        {
+            public int STR { get; set; } = 0;
+            public int CONS { get; set; } = 0;
+            public int DEF { get; set; } = 0;
+        }
         private ForGloryContext _context;
 
         public CharacterController(ForGloryContext context)
@@ -30,13 +36,15 @@ namespace ForGloryDB.Controllers
                 return NoContent();
             return new ObjectResult(data);
         }
-        [HttpPut("{name}/{username}")]
-        public IActionResult UpdateChar([FromBody] Character ch,string name, string username)
+        [HttpPut]
+        public IActionResult UpdateChar([FromBody] Character ch)
         {
-            if (name == "" || username == "")
+            if (ch == null)
                 return BadRequest();
-            var data = _context.Character.FirstOrDefault(e => e.Name.Equals(name));
-            if (!data.Username.Equals(username))
+            var data = _context.Character.FirstOrDefault(e => e.Name.Equals(ch.Name));
+            if (data == null)
+                return NotFound();
+            if (!data.Username.Equals(ch.Username))
                 return BadRequest();
             data.CharacterType = ch.CharacterType;
             data.Name = ch.Name;
@@ -46,16 +54,52 @@ namespace ForGloryDB.Controllers
             
         }
         [HttpPut("{name}")]
-        public IActionResult UpdateCharLocation([FromBody] double[] ch, string name)
+        public IActionResult UpdateCharStats([FromBody] Stats stats, string name)
+        {
+            if (name == "")
+                return BadRequest();
+            var data = _context.Character.FirstOrDefault(e => e.Name.Equals(name));
+            if (data == null)
+                return NotFound();
+            if (data.Str+stats.STR + data.Cons+stats.CONS + data.Def + stats.DEF > 30 + 2 * data.Level)
+                return StatusCode(409);
+            data.Str += stats.STR;
+            data.Cons += stats.CONS;
+            data.Def += stats.DEF;
+            _context.Character.Update(data);
+            _context.SaveChanges();
+            string msg = "UPDATESTATS|" + data.Str + "|" + data.Cons + "|" + data.Def;
+            return new ObjectResult(msg);
+        }
+        [HttpPut("progress/{name}")]
+        public IActionResult UpdateCharProgress([FromBody] Character ch, string name)
+        {
+            if (name == "")
+                return BadRequest();
+            var data = _context.Character.FirstOrDefault(e => e.Name.Equals(name));
+            if (data == null)
+                return NotFound();
+            data.Progress = ch.Progress;
+            data.Level = ch.Level;
+            data.Gold += ch.Gold;
+            _context.Character.Update(data);
+            _context.SaveChanges();
+            return new ObjectResult(data);
+        }
+
+
+
+        [HttpDelete("reset/{name}")]
+        public IActionResult ResetStats(string name)
         {
             if (name == "")
                 return BadRequest();
             var data = _context.Character.FirstOrDefault(e => e.Name.Equals(name));
             if (data != null)
                 return NotFound();
-            data.X = ch[0];
-            data.Y = ch[1];
-            data.Z = ch[2];
+            data.Str = 10;
+            data.Cons = 10;
+            data.Def = 10;
             _context.Character.Update(data);
             _context.SaveChanges();
             return Accepted();
@@ -63,11 +107,29 @@ namespace ForGloryDB.Controllers
         [HttpPost]
         public IActionResult CreatCharacter([FromBody] Character chr)
         {
-            if (chr.Slot > 2 || chr.X != 0 || chr.Y != 0 || chr.Z != 0)
+            if (chr.Slot > 2 || chr.Str != 10 || chr.Cons != 10 || chr.Def != 10)
                 return StatusCode(418);
-            if(_context.Character.FirstOrDefault(e => e.Name.Equals(chr.Name)) != null || _context.Character.FirstOrDefault(e => e.Username.Equals(chr.Slot))!=null)
+            if(_context.Character.FirstOrDefault(e => e.Name.Equals(chr.Name)) != null || _context.Character.FirstOrDefault(e => e.Slot.Equals(chr.Slot) && e.Username.Equals(chr.Name)) != null)
                 return StatusCode(409);
             _context.Character.Add(chr);
+            switch(chr.CharacterType)
+            {
+                case "generic_knight":
+                    _context.Items.Add(new Items(100, chr.CharacterType, chr.Name));
+                    _context.Items.Add(new Items(800, "Sheald", chr.Name));
+                    break;
+                case "generic_swordsman":
+                    _context.Items.Add(new Items(200, chr.CharacterType, chr.Name));
+                    break;
+                case "generic_two_hands_swordsman":
+                    _context.Items.Add(new Items(300, chr.CharacterType, chr.Name));
+                    break;
+            }
+            _context.Items.Add(new Items(400, "Armour", chr.Name));
+            _context.Items.Add(new Items(500, "Boots", chr.Name));
+            _context.Items.Add(new Items(600, "Gloves", chr.Name));
+            _context.Items.Add(new Items(700, "Helmet", chr.Name));
+            
             _context.SaveChanges();
             return Accepted();
         }
@@ -79,6 +141,12 @@ namespace ForGloryDB.Controllers
             var data = _context.Character.FirstOrDefault(e => e.Name.Equals(name));
             if(data == null)
                 return NotFound();
+            foreach(Unit unit in _context.Unit.Where(x => x.NameCharacter == data.Name))
+            {
+                _context.Items.RemoveRange(_context.Items.Where(x => x.UnitId == unit.Id));
+                _context.Unit.Remove(unit);
+            }
+            _context.Items.RemoveRange(_context.Items.Where(x => x.NameCharacter == data.Name));
             _context.Character.Remove(data);
             _context.SaveChanges();
             return Ok();

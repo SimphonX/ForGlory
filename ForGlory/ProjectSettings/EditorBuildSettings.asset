@@ -15,8 +15,11 @@ EditorBuildSettings:
     path: Assets/Scenes/GameScrean.unity
     guid: b1b723baaaf82484eb0bb957b97b4451
   - enabled: 1
+    path: Assets/Scenes/Server.unity
+    guid: 89d5bb4a34348fc47ab5ade52ce0f86b
+  - enabled: 1
     path: Assets/Scenes/Client.unity
     guid: e588e39824a420147a8cbb6ca85a873d
   - enabled: 1
-    path: Assets/Scenes/Server.unity
-    guid: 89d5bb4a34348fc47ab5ade52ce0f86b
+    path: Assets/Scenes/HUBArea.unity
+    guid: eabdbf0018bd8134984f7dc3315c56fb

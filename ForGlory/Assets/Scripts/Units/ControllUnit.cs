@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
@@ -11,24 +12,26 @@ namespace Assets.Scripts.Units
         private int[] size = new int[2];
         private string types;
         public Sprite type;
-        private List<Soldier> soldiers = new List<Soldier>();
-        private Vector3 targetPosition;
+        public List<Soldier> soldiers = new List<Soldier>();
+        public Vector3 targetPosition;
         public float speed;
         private float x, z;
         public NavMeshAgent mNavMeshAgent;
         private Transform deltaPos;
         private bool attack = false;
+        private int hp;
 
         public float HpProc
         {
             get
             {
-                var hpLeft = 0;
-                var hpMax = 0;
-                soldiers.ForEach(x => hpLeft += x.HpLeft);
-                soldiers.ForEach(x => hpMax += x.Hp);
-                return (float)hpLeft /hpMax*100;
+                return (float)HpLeft * 100 / (GetComponentInParent<UnitGroup>().Hp);
             }
+        }
+
+        public int GetSize()
+        {
+            return size[0] * size[1];
         }
 
         public int Level { get; set; }
@@ -38,34 +41,53 @@ namespace Assets.Scripts.Units
             get
             {
                 var hpLeft = 0;
-                soldiers.ForEach(x => hpLeft += x.HpLeft);
+                foreach(Soldier sol in Soldiers)
+                    hpLeft += sol.HpLeft;
                 return hpLeft;
             }
         }
 
-        public List<Soldier> Soldiers { get; }
+        public List<Soldier> Soldiers
+        {
+            get
+            {
+                return soldiers;
+            }
+        }
 
-        public int[] Size { get; set; }
+        public int[] Size
+        {
+            get
+            {
+                return size;
+            }
+        }
 
         void Start()
         {
             
         }
 
-        public void CreatUnits()
+        internal void RemoveSoldier(Soldier sol)
         {
-            for (float i = -((float)Size[0] -1)/ 2; i <= Size[0] / 2; i++) 
+            soldiers.Remove(sol);
+        }
+
+        public void CreatUnits(bool isYours)
+        {
+            for (float i = -((float)size[0] -1)/ 2; i <= size[0] / 2; i++) 
             {
-                for (float j = -((float)Size[1]-1) / 2; j <= Size[1] / 2; j++)
+                for (float j = -((float)size[1]-1) / 2; j <= size[1] / 2; j++)
                 {
                     Soldier sol = Instantiate(preSold, gameObject.transform.position, Quaternion.identity);
                     sol.transform.GetChild(0).GetComponent<SpriteRenderer>().sprite = type;
                     sol.gameObject.name = "Bot" + i + "" + j;
-                    sol.SetPosition(i, j);
+                    sol.SetPosition(i*2, j*2);
+                    sol.IsYours = isYours;
                     sol.GetComponent<Soldier>().DeltaPos = transform;
                     sol.gameObject.transform.parent = transform.parent;
-                    sol.transform.position = new Vector3(deltaPos.position.x + i, deltaPos.position.y, deltaPos.position.z + j);
-                    Soldiers.Add(sol);
+                    sol.transform.position = new Vector3(deltaPos.position.x + i*2, deltaPos.position.y, deltaPos.position.z + j*2);
+                    soldiers.Add(sol);
                 }
             }
         }
@@ -73,50 +95,63 @@ namespace Assets.Scripts.Units
         void Update()
         {
             if (Soldiers.Count > 0)
-            {
                 if(mNavMeshAgent.destination != targetPosition) mNavMeshAgent.destination = targetPosition;
-            }
-            /*if (Soldiers.Count < 0)
-                Destroy(transform.parent.);*/
+            else
+                Destroy(transform.parent.gameObject);
             
         }
 
         public void SetTargetLocation(Vector3 targPos)
         {
-            soldiers.ForEach(x => x.MoveUnit());
+            Soldiers.ForEach(x => x.MoveUnit());
             targetPosition = targPos;
-            attack = false;
-        }
-        
-        public void Init()
-        {
-            CreatUnits();
         }
 
-        public void SetParams(Sprite type, Transform data)
+        public void Init(bool isYours)
         {
+            CreatUnits(isYours);
+        }
+
+        public void SetStartPos(Vector3 pos)
+        {
+            mNavMeshAgent.Warp(pos);
+            Soldiers.ForEach(x=> x.SetStartPos(pos));
+        }
+
+        public void SetParams(Sprite type, Transform data, int level)
+        {
+            Level = level;
             this.type = type;
+            size[0] = 5;
+            size[1] = 4;
             SetStats();
             deltaPos = data;
             targetPosition = deltaPos.position;
-            soldiers.ForEach(x => x.MoveUnit());
+            Soldiers.ForEach(x => x.MoveUnit());
         }
+
         public void SetStats()
         {
-            speed = 3;
+            speed = 6;
             mNavMeshAgent.speed = speed;
         }
+
         public void SetColliderSize(BoxCollider box)
         {
-            box.transform.localScale = new Vector3(Size[0], 0,Size[1]);
+            box.transform.localScale = new Vector3(Size[0]*2, 0,Size[1]*2);
         }
         
         public void AttackUnits(GameObject arrow, GameObject enemy)
         {
-            int k = 2;
-            for (int i = 0; i < soldiers.ToArray().Length; i++)
+            if(enemy.transform.parent.tag == "Player")
             {
-                soldiers.ToArray()[i].AttackUnit(enemy, enemy.transform.parent.GetChild(k).gameObject, arrow);
+                soldiers.ForEach(x => x.AttackUnit(enemy.transform.parent.gameObject, enemy.transform.parent.gameObject, arrow));
+                return;
+            }
+            int k = 2;
+            for (int i = 0; i < Soldiers.ToArray().Length; i++)
+            {
+                Soldiers.ToArray()[i].AttackUnit(enemy.transform.parent.gameObject, enemy.transform.parent.GetChild(k).gameObject, arrow);
                 k++;
                 if (k == enemy.transform.parent.childCount)
                     k = 2;
@@ -124,20 +159,32 @@ namespace Assets.Scripts.Units
             }
 
         }
+
         public void AttackUnits(GameObject enemy)
         {
-            if (attack) return;
+            Debug.Log(enemy.name);
+            if (enemy.tag == "Player")
+            {
+                soldiers.ForEach(x => x.AttackUnit(enemy, enemy));
+                return;
+            }
             int k = 2;
-            Debug.Log(attack);
-            attack = true;
             for (int i = 0; i < soldiers.ToArray().Length; i++)
             {
-                soldiers.ToArray()[i].AttackUnit(enemy, enemy.transform.parent.GetChild(k).gameObject);
-                k++;
-                if (k == enemy.transform.parent.childCount)
+                Debug.Log(soldiers[i]);
+                soldiers[i].AttackUnit(enemy, enemy.transform.GetChild(k++).gameObject);
+                if (k == enemy.transform.childCount)
                     k = 2;
                 
             }
+        }
+
+        internal void RemoveUnits()
+        {
+            Debug.Log(Soldiers.ToArray().Length);
+            //foreach(Soldier sol in soldiers)
+            soldiers.ForEach(x => Destroy(x.gameObject));
+            Soldiers.Clear();
         }
     }
 }

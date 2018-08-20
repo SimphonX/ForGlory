@@ -1,0 +1,18 @@
+version: 2
+importPivots: 1
+tpsheetFileNames:
+- Assets/Resources/codeandweb.com/Example/SpriteSheet/sprites.tpsheet
+- Assets/Resources/Textures/SwordsMan/Attack.tpsheet
+- Assets/Resources/Textures/SwordsMan/idel.tpsheet
+- Assets/Resources/Textures/SwordsMan/WolkTex.tpsheet
+textureFileNames:
+- Assets/Resources/codeandweb.com/Example/SpriteSheet/sprites.png
+- Assets/Resources/Textures/SwordsMan/Attack.png
+- Assets/Resources/Textures/SwordsMan/idel.png
+- Assets/Resources/Textures/SwordsMan/WolkTex.png
+normalmapFileNames:
+- Assets/Resources/codeandweb.com/Example/SpriteSheet/sprites_n.png
+- 
+- 
+- 
+enableDebugOutput: 0

@@ -37,10 +37,10 @@ GameObject:
   m_Component:
   - component: {fileID: 4263533413319376}
   - component: {fileID: 65713457619374232}
-  - component: {fileID: 54474604186245738}
   - component: {fileID: 195712269676967664}
   - component: {fileID: 114901523073817986}
   - component: {fileID: 23648797902623738}
+  - component: {fileID: 54668067420777010}
   m_Layer: 9
   m_Name: Soldier
   m_TagString: Untagged
@@ -58,6 +58,7 @@ GameObject:
   - component: {fileID: 4284936647289690}
   - component: {fileID: 212730552775124462}
   - component: {fileID: 114750776252267514}
+  - component: {fileID: 95574948409836782}
   m_Layer: 0
   m_Name: PlayerSprite
   m_TagString: Untagged
@@ -88,7 +89,7 @@ Transform:
   m_GameObject: {fileID: 1894347421020258}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 7, y: 7, z: 1}
+  m_LocalScale: {x: 15, y: 15, z: 1}
   m_Children: []
   m_Father: {fileID: 4263533413319376}
   m_RootOrder: 0
@@ -119,6 +120,7 @@ MeshRenderer:
   m_MotionVectors: 2
   m_LightProbeUsage: 0
   m_ReflectionProbeUsage: 0
+  m_RenderingLayerMask: 4294967295
   m_Materials:
   - {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
   m_StaticBatchInfo:
@@ -153,6 +155,7 @@ MeshRenderer:
   m_MotionVectors: 1
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
+  m_RenderingLayerMask: 4294967295
   m_Materials:
   - {fileID: 0}
   m_StaticBatchInfo:
@@ -181,7 +184,7 @@ MeshFilter:
   m_PrefabInternal: {fileID: 100100000}
   m_GameObject: {fileID: 1706711952625742}
   m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
---- !u!54 &54474604186245738
+--- !u!54 &54668067420777010
 Rigidbody:
   m_ObjectHideFlags: 1
   m_PrefabParentObject: {fileID: 0}
@@ -191,10 +194,10 @@ Rigidbody:
   m_Mass: 1
   m_Drag: 0
   m_AngularDrag: 0.05
-  m_UseGravity: 1
+  m_UseGravity: 0
   m_IsKinematic: 0
   m_Interpolate: 0
-  m_Constraints: 112
+  m_Constraints: 80
   m_CollisionDetection: 0
 --- !u!65 &65713457619374232
 BoxCollider:
@@ -203,11 +206,29 @@ BoxCollider:
   m_PrefabInternal: {fileID: 100100000}
   m_GameObject: {fileID: 1886226467245158}
   m_Material: {fileID: 0}
-  m_IsTrigger: 1
+  m_IsTrigger: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Size: {x: 0.5, y: 1, z: 0.5}
+  m_Size: {x: 0.4, y: 1, z: 0.4}
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!95 &95574948409836782
+Animator:
+  serializedVersion: 3
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1894347421020258}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: f2e079c1dd3c0c44b9156a6aaac5b8bf, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorControllerStateOnDisable: 0
 --- !u!114 &114750776252267514
 MonoBehaviour:
   m_ObjectHideFlags: 1
@@ -230,11 +251,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 435614bfd53cb8c4cae94ffa777922cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  hp: 0
+  hpLeft: 1
+  damage: 0
+  def: 0
+  idle: 0
+  attack: 0
+  move: 0
+  targetPosition: {x: 0, y: 0, z: 0}
   speed: 4
+  intervalAttack: 5
+  idleTime: 5
+  timeLeft: 0
   mNavMeshAgent: {fileID: 195712269676967664}
   enemyGroup: {fileID: 0}
   enemy: {fileID: 0}
-  main: 0
 --- !u!195 &195712269676967664
 NavMeshAgent:
   m_ObjectHideFlags: 1
@@ -244,8 +275,8 @@ NavMeshAgent:
   m_Enabled: 1
   m_AgentTypeID: 0
   m_Radius: 0.2
-  m_Speed: 3.5
-  m_Acceleration: 8
+  m_Speed: 6
+  m_Acceleration: 20
   avoidancePriority: 50
   m_AngularSpeed: 0
   m_StoppingDistance: 0
@@ -269,6 +300,7 @@ SpriteRenderer:
   m_MotionVectors: 1
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
+  m_RenderingLayerMask: 4294967295
   m_Materials:
   - {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
   m_StaticBatchInfo:
@@ -291,7 +323,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_Sprite: {fileID: 10911, guid: 0000000000000000f000000000000000, type: 0}
-  m_Color: {r: 1, g: 0.04411763, b: 0.04411763, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 1

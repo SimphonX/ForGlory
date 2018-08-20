@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Unit
   - MovableObject
+  - NPC
   layers:
   - Default
   - TransparentFX
@@ -18,9 +19,9 @@ TagManager:
   - UnitShadow
   - Unit
   - Player
-  - 
-  - 
-  - 
+  - Arrow
+  - Weapon
+  - NPC
   - 
   - 
   - 

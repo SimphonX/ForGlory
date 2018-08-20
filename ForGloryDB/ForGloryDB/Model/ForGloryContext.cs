@@ -13,10 +13,12 @@ namespace ForGloryDB.Model
         private DbSet<User> user;
         private DbSet<Character> character;
         private DbSet<Unit> unit;
+        private DbSet<Items> items;
 
         public DbSet<User> User { get => user; set => user = value; }
         public DbSet<Character> Character { get => character; set => character = value; }
         public DbSet<Unit> Unit { get => unit; set => unit = value; }
+        public DbSet<Items> Items { get => items; set => items = value; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -41,7 +43,6 @@ namespace ForGloryDB.Model
             {
                 entity.ToTable("unit");
                 entity.Property(e => e.Id)
-                    .IsRequired()
                     .HasColumnName("id")
                     .HasMaxLength(11);
                 entity.Property(e => e.Level)
@@ -55,9 +56,13 @@ namespace ForGloryDB.Model
                     .IsRequired()
                     .HasColumnName("name_character")
                     .HasMaxLength(255);
-                entity.Property(e => e.InUse)
-                    .HasColumnName("inUse")
+                entity.Property(e => e.Slot)
+                    .HasColumnName("slot")
                     .HasMaxLength(4);
+                entity.Property(e => e.Progress)
+                    .HasColumnName("progress")
+                    .HasMaxLength(11);
+                
             });
 
             modelBuilder.Entity<Character>(entity =>
@@ -80,17 +85,50 @@ namespace ForGloryDB.Model
                     .IsRequired()
                     .HasColumnName("slot")
                     .HasMaxLength(11);
-                entity.Property(e => e.X)
-                    .IsRequired()
-                    .HasColumnName("x")
+                entity.Property(e => e.Str)
+                    .HasColumnName("str")
                     .HasMaxLength(11);
-                entity.Property(e => e.Y)
-                    .IsRequired()
-                    .HasColumnName("y")
+                entity.Property(e => e.Cons)
+                    .HasColumnName("cons")
                     .HasMaxLength(11);
-                entity.Property(e => e.Z)
+                entity.Property(e => e.Def)
+                    .HasColumnName("def")
+                    .HasMaxLength(11);
+                entity.Property(e => e.Level)
+                    .HasColumnName("level")
+                    .HasMaxLength(11);
+                entity.Property(e => e.Progress)
+                    .HasColumnName("progress")
+                    .HasMaxLength(11);
+                entity.Property(e => e.Gold)
+                    .HasColumnName("gold")
+                    .HasMaxLength(11);
+            });
+
+            modelBuilder.Entity<Items>(entity =>
+            {
+                entity.ToTable("items");
+                entity.Property(e => e.Id)
+                    .HasColumnName("id")
+                    .HasMaxLength(11);
+                entity.Property(e => e.ItemId)
+                    .HasColumnName("item_id")
+                    .HasMaxLength(11);
+                entity.Property(e => e.Level)
+                    .HasColumnName("level")
+                    .HasMaxLength(11);
+                entity.Property(e => e.Type)
                     .IsRequired()
-                    .HasColumnName("z")
+                    .HasColumnName("type")
+                    .HasMaxLength(255);
+                entity.Property(e => e.InUse)
+                    .HasColumnName("inUse")
+                    .HasMaxLength(4);
+                entity.Property(e => e.NameCharacter)
+                    .HasColumnName("name_character")
+                    .HasMaxLength(255);
+                entity.Property(e => e.UnitId)
+                    .HasColumnName("unit_id")
                     .HasMaxLength(11);
 
             });

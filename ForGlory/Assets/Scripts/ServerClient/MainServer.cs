@@ -1,13 +1,17 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Mail;
+using System.Net.NetworkInformation;
 using System.Net.Security;
+using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.Networking.Match;
 using UnityEngine.UI;
 
 namespace Assets.Scripts.ServerClient
@@ -19,6 +23,7 @@ namespace Assets.Scripts.ServerClient
         public string password;
         public string email;
     }
+
     public class JsonHelper
     {
         public static T[] getJsonArray<T>(string json)
@@ -41,6 +46,7 @@ namespace Assets.Scripts.ServerClient
     }
 
 
+
     [Serializable]
     public class PlayerCharacter
     {
@@ -48,11 +54,29 @@ namespace Assets.Scripts.ServerClient
         public string username;
         public string characterType;
         public int slot;
-        public int x, y, z;
+        public int str, cons, def;
+        public int level, progress;
+        public int gold;
 
         public override string ToString()
         {
-            return name + "&" + characterType + "&" + slot + "&" + x + "^" + y + "^" + z;
+            return name + "&" + characterType + "&" + slot + "&" + level + "&" + progress + "&" + gold + "&" + str + "&" + cons + "&" + def;
+        }
+    }
+    [Serializable]
+    public class ItemData
+    {
+        public int id;
+        public int itemId;
+        public int level;
+        public string type;
+        public bool inUse;
+        public string nameCharacter;
+        public int unitId;
+
+        public override string ToString()
+        {
+            return level + "&" + type + "&" + itemId;
         }
     }
     [Serializable]
@@ -62,21 +86,30 @@ namespace Assets.Scripts.ServerClient
         public int level;
         public string type;
         public string nameCharacter;
-        public bool inUse;
+        public int slot;
+        public int progress;
 
         public override string ToString()
         {
-            return level + "&" + type + "&" + nameCharacter;
+            return level + "&" + type + "&" + nameCharacter + "&" + progress + "&" + slot + "&" + id;
         }
     }
 
 
     public class MainServer : MonoBehaviour
     {
-
         private const int MAX_CONNECTION = 100;
 
-        private int port = 5100;
+        //change to server to server
+        List<long[]> activeMatch = new List<long[]>();
+        bool matchCreated;
+        bool matchJoined;
+        MatchInfo matchInfo;
+        NetworkMatch networkMatch;
+
+
+        private int port = 20001;
+        private const int MAXMESSAGESIZE = 65535;
 
         private int hostId;
         private int webHostId;
@@ -102,19 +135,64 @@ namespace Assets.Scripts.ServerClient
             }
         }
 
+        void Awake()
+        {
+
+            //networkMatch = gameObject.AddComponent<NetworkMatch>();
+        }
+        void OnApplicationQuit()
+        {
+            NetworkTransport.Shutdown();
+        }
+
         private void Start()
         {
             NetworkTransport.Init();
             ConnectionConfig cc = new ConnectionConfig();
-
+            
             reliableChannel = cc.AddChannel(QosType.Reliable);
             unreliableChannel = cc.AddChannel(QosType.Unreliable);
-
             HostTopology topo = new HostTopology(cc, MAX_CONNECTION);
 
             hostId = NetworkTransport.AddHost(topo, port, null);
             webHostId = NetworkTransport.AddWebsocketHost(topo, port, null);
             isStarted = true;
+            GetIP();
+        }
+        private void GetIP()
+        {
+            string localIpAddress = string.Empty;
+            NetworkInterface[] nics = NetworkInterface.GetAllNetworkInterfaces();
+
+            foreach (NetworkInterface nic in nics)
+            {
+                if (nic.OperationalStatus != OperationalStatus.Up)
+                {
+                    continue;
+                }
+
+                IPv4InterfaceStatistics adapterStat = (nic).GetIPv4Statistics();
+                UnicastIPAddressInformationCollection uniCast = (nic).GetIPProperties().UnicastAddresses;
+
+                if (uniCast != null)
+                {
+                    foreach (UnicastIPAddressInformation uni in uniCast)
+                    {
+                        if (adapterStat.UnicastPacketsReceived > 0
+                            && adapterStat.UnicastPacketsSent > 0
+                            && nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                        {
+                            if (uni.Address.AddressFamily == AddressFamily.InterNetwork)
+                            {
+                                localIpAddress = nic.GetIPProperties().UnicastAddresses[1].Address.ToString();
+
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            textField.text+= localIpAddress+"\n";
         }
 
         private void Update()
@@ -125,12 +203,11 @@ namespace Assets.Scripts.ServerClient
             int recHostId;
             int connectionId;
             int channelId;
-            byte[] recBuffer = new byte[1024];
-            int bufferSize = 1024;
+            byte[] recBuffer = new byte[MAXMESSAGESIZE];
+            int bufferSize = MAXMESSAGESIZE;
             int dataSize;
             byte error;
             NetworkEventType recData = NetworkTransport.Receive(out recHostId, out connectionId, out channelId, recBuffer, bufferSize, out dataSize, out error);
-
             switch (recData)
             {
                 case NetworkEventType.ConnectEvent:
@@ -164,21 +241,258 @@ namespace Assets.Scripts.ServerClient
                         case "GETINUSEUNITS":
                             StartCoroutine(OnGetInUseUnits(splitData[1], connectionId));
                             break;
+                        case "SETPROGRESS":
+                            StartCoroutine(OnSetProgress(int.Parse(splitData[1]), int.Parse(splitData[2]), int.Parse(splitData[3]),bool.Parse(splitData[4]), connectionId));
+                            break;
+                        case "SETUNITPROGRESS":
+                            StartCoroutine(OnSetUnitProgress(int.Parse(splitData[1]), int.Parse(splitData[2]), int.Parse(splitData[3]), connectionId));
+                            break;
+                        case "GETCHARITEMS":
+                            StartCoroutine(OnGetPlayerItems(splitData[1], connectionId));
+                            break;
+                        case "UPGRADEITEM":
+                            StartCoroutine(OnUpgradeItem(splitData[2], int.Parse(splitData[1]), int.Parse(splitData[3]), connectionId));
+                            break;
+                        case "UPGRADESTAT":
+                            StartCoroutine(OnUpgradeStats(splitData[1], connectionId));
+                            break;
+                        case "DELETEUNIT":
+                            StartCoroutine(OnDeleteUnit(int.Parse(splitData[1]), connectionId));
+                            break;
+                        case "CREATEUNIT":
+                            StartCoroutine(OnCreateUnit(splitData[1],splitData[2],int.Parse(splitData[3]), connectionId));
+                            break;
+                        case "UPDATESLOT":
+                            StartCoroutine(OnUpdateSlot(int.Parse(splitData[1]), int.Parse(splitData[2]), connectionId));
+                            break;
+                        case "REMOVEMATCH":
+                            OnStartGame(connectionId);
+                            break;
+                        case "GAMESLIST":
+                            OnGetGameList(connectionId);
+                            break;
+                        case "CREATEGAME":
+                            OnCreateGame(Int64.Parse(splitData[1]), connectionId);
+                            break;
                         default:
                             Debug.Log("Invalid message : " + msg);
                             break;
                     }
                     break;
                 case NetworkEventType.DisconnectEvent:
-
+                    OnDisconnect(connectionId);
                     break;
             }
 
         }
 
+        private void OnCreateGame(long id, int cnnId)
+        {
+            activeMatch.Add(new long [] { id, cnnId});
+        }
+
+        private void OnGetGameList(int cnnId)
+        {
+            string msg = "ACTIVEMATCH";
+            foreach (long[] match in activeMatch)
+            {
+                msg += "|" + match[0];
+            }
+            Send(msg, cnnId);
+        }
+
+        private void OnStartGame(int cnnId)
+        {
+            activeMatch.RemoveAll(x => x[1] == cnnId);
+        }
+
+        private IEnumerator OnUpdateSlot(int id, int pos, int cnnId)
+        {
+            UnityWebRequest www = UnityWebRequest.Put("http://localhost:5000/api/units/inuse/" + id + "/" + pos, "{}");
+
+            yield return www.SendWebRequest();
+            if (www.isNetworkError || www.isHttpError)
+            {
+                if (www.responseCode == 404 || www.responseCode == 402) Send("ERROR|character doesn't exist", cnnId);
+                else Send("ERROR|" + www.error, cnnId);
+            }
+        }
+
+        private IEnumerator OnCreateUnit(string type, string name,int gold, int cnnId)
+        {
+            string jsonPost = type + "|" + name + "|" + gold;
+            textField.text += jsonPost + "\n";
+            var request = new UnityWebRequest("http://localhost:5000/api/units", "POST");
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonPost);
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            yield return request.SendWebRequest();
+            if (request.isNetworkError || request.isHttpError)
+            {
+                if (request.responseCode == 404 || request.responseCode == 402) Send("ERROR|", cnnId);
+                else Send("ERROR|" + request.error, cnnId);
+            }
+            else
+            {
+                string msg = "CREATEUNIT|";
+                string json = request.downloadHandler.text;
+                UnitsData c = JsonUtility.FromJson<UnitsData>(json);
+                msg += c.level + "|" + c.type + "|" + c.progress + "|" + c.slot + "|" + c.id;
+
+                Send(msg, reliableChannel, cnnId);
+            }
+        }
+
+        private IEnumerator OnDeleteUnit(int id, int cnnId)
+        {
+            UnityWebRequest www = UnityWebRequest.Delete("http://localhost:5000/api/units/" + id);
+
+            yield return www.SendWebRequest();
+            if (www.isNetworkError || www.isHttpError)
+            {
+                if (www.responseCode == 404 || www.responseCode == 402) Send("ERROR|character doesn't exist", cnnId);
+                else Send("ERROR|" + www.error, cnnId);
+            }
+        }
+
+        private IEnumerator OnUpgradeStats(string name, int cnnId)
+        {
+            var player = clients.Find(x => x.connectionId == cnnId);
+            string jsonPost = "{ \""+name+"\":" + 1 + " }";
+            textField.text += jsonPost + "\nhttp://localhost:5000/api/character/" + player.playerName + "\n";
+            UnityWebRequest www = new UnityWebRequest("http://localhost:5000/api/character/" + player.playerName, "PUT");
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonPost);
+            www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            www.downloadHandler = new DownloadHandlerBuffer();
+            www.SetRequestHeader("Content-Type", "application/json");
+
+            yield return www.SendWebRequest();
+            if (www.isNetworkError || www.isHttpError)
+            {
+                if (www.responseCode == 404 || www.responseCode == 402) Send("ERROR|", cnnId);
+                else Send("ERROR|" + www.error, cnnId);
+            }
+            else
+            {
+                string msg = www.downloadHandler.text;
+                Send(msg.Replace("\"", ""), reliableChannel, cnnId);
+            }
+        }
+
+        private IEnumerator OnUpgradeItem(string name, int code, int gold, int cnnId)
+        {
+            string jsonPost = "{ 'code':" +code+", 'gold':"+gold+"}";
+            UnityWebRequest www = new UnityWebRequest("http://localhost:5000/api/items/" + name, "PUT");
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonPost);
+            www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            www.downloadHandler = new DownloadHandlerBuffer();
+            www.SetRequestHeader("Content-Type", "application/json");
+
+            yield return www.SendWebRequest();
+            if (www.isNetworkError || www.isHttpError)
+            {
+                if (www.responseCode == 404 || www.responseCode == 402) Send("ERROR|", cnnId);
+                else Send("ERROR|" + www.error, cnnId);
+            }
+            else
+            {
+                string msg = www.downloadHandler.text;
+                Send(msg.Replace("\"",""), reliableChannel, cnnId);
+            }
+        }
+
+        private IEnumerator OnGetPlayerItems(string charName, int cnnId)
+        {
+            UnityWebRequest www = UnityWebRequest.Get("http://localhost:5000/api/items/char/" + charName);
+
+            yield return www.SendWebRequest();
+            if (www.isNetworkError || www.isHttpError)
+            {
+                if (www.responseCode == 404 || www.responseCode == 402) Send("ERROR|character doesn't exist", cnnId);
+                else Send("ERROR|" + www.error, cnnId);
+            }
+            else
+            {
+                string json = www.downloadHandler.text;
+
+                string msg = "INUSEITEMCHAR";
+                ItemData[] c = JsonHelper.getJsonArray<ItemData>(json);
+                textField.text += json + "\n";
+                foreach (ItemData ch in c)
+                {
+                    msg += "|" + ch.ToString();
+                }
+                Send(msg, reliableChannel, cnnId);
+            }
+        }
+
+        private IEnumerator OnSetUnitProgress(int progress, int level, int pos, int cnnId)
+        {
+            var player = clients.Find(x => x.connectionId == cnnId);
+            string jsonPost = "{'progress':" + progress + ", 'level':" + level + "}";
+
+            UnityWebRequest www = new UnityWebRequest("http://localhost:5000/api/units/progress/" + player.playerName+"/"+pos, "PUT");
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonPost);
+            www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            www.downloadHandler = new DownloadHandlerBuffer();
+            www.SetRequestHeader("Content-Type", "application/json");
+
+            yield return www.SendWebRequest();
+            if (www.isNetworkError || www.isHttpError)
+            {
+                if (www.responseCode == 404 || www.responseCode == 402) Send("ERROR|Bed request", cnnId);
+                else Send("ERROR|" + www.error, cnnId);
+            }
+            else
+            {
+                string msg = "METCHENDUNITOK|";
+                string json = www.downloadHandler.text;
+                UnitsData c = JsonUtility.FromJson<UnitsData>(json);
+                msg += c.progress + "|" + c.level + "|" + c.slot + "|" + c.id;
+
+                Send(msg, reliableChannel, cnnId);
+            }
+        }
+
+        private IEnumerator OnSetProgress(int progress, int level, int gold, bool bar, int cnnId)
+        {
+            var player = clients.Find(x => x.connectionId == cnnId);
+            string jsonPost = "{'progress':" + progress + ", 'level':" + level + ", 'gold':" + gold + "}";
+
+            UnityWebRequest www = new UnityWebRequest("http://localhost:5000/api/character/progress/" + player.playerName, "PUT");
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonPost);
+            www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            www.downloadHandler = new DownloadHandlerBuffer();
+            www.SetRequestHeader("Content-Type", "application/json");
+
+            yield return www.SendWebRequest();
+            if (www.isNetworkError || www.isHttpError)
+            {
+                if (www.responseCode == 404 || www.responseCode == 402) Send("ERROR|Bed request", cnnId);
+                else Send("ERROR|" + www.error, cnnId);
+            }
+            else if(!bar)
+            {
+                string msg = "METCHENDOK|";
+                string json = www.downloadHandler.text;
+                PlayerCharacter c = JsonUtility.FromJson<PlayerCharacter>(json);
+                msg += c.progress + "|" + c.gold + "|" + c.level;
+                
+                Send(msg, reliableChannel, cnnId);
+            }
+        }
+
+        private void OnDisconnect(int connectionId)
+        {
+            activeMatch.RemoveAll(x => x[1] == connectionId);
+            var player = clients.Remove(clients.Find(x => x.connectionId == connectionId));
+        }
+
         private IEnumerator OnGetInUseUnits(string charName, int cnnId)
         {
-            UnityWebRequest www = UnityWebRequest.Get("http://localhost:5000/api/units/inuse/" + charName);
+            UnityWebRequest www = UnityWebRequest.Get("http://localhost:5000/api/units/" + charName);
 
             yield return www.SendWebRequest();
             if (www.isNetworkError || www.isHttpError)
@@ -197,8 +511,6 @@ namespace Assets.Scripts.ServerClient
                 {
                     msg += "|" + ch.ToString();
                 }
-
-                textField.text += msg + "\n asdasdasd";
                 Send(msg, reliableChannel, cnnId);
             }
         }
@@ -262,7 +574,6 @@ namespace Assets.Scripts.ServerClient
 
         private IEnumerator OnGetChar(string playerName, int cnnId)
         {
-            textField.text += playerName + "\n";
             UnityWebRequest www = UnityWebRequest.Get("http://localhost:5000/api/character/" + playerName);
 
             yield return www.SendWebRequest();
@@ -274,7 +585,6 @@ namespace Assets.Scripts.ServerClient
             else
             {
                 string json = www.downloadHandler.text;
-                textField.text += json + "\n";
 
                 string msg = "CHARINFO";
                 if (json.Contains("{"))
@@ -339,7 +649,7 @@ namespace Assets.Scripts.ServerClient
                 c.connectionId = cnnId;
                 c.playerName = username;
                 clients.Add(c);
-                Send("CNN|" + cnnId, reliableChannel, cnnId);
+                Send("YES", reliableChannel, cnnId);
             }
         }
 
@@ -368,7 +678,6 @@ namespace Assets.Scripts.ServerClient
         private void OnConnection(int cnnId)
         {
             string msg = "ASKLOGIN";
-            textField.text += msg;
 
             Send(msg, cnnId);
         }

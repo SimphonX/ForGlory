@@ -1,15 +1,12 @@
-﻿using Assets.Scripts.HUB;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
+﻿using System.Linq;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-
+using Assets.Scripts.CanvasPanel.GameScrean;
+using Assets.Scripts.CanvasPanel.Menu;
+using Assets.Scripts.Player.Player;
 
 namespace Assets.Scripts.ServerClient
 {
@@ -18,7 +15,12 @@ namespace Assets.Scripts.ServerClient
 
         private const int MAX_CONNECTION = 100;
 
-        private int port = 5100;
+        private const int port = 20001;
+
+        private const string ipAdress = "127.0.0.1";
+
+        public string connectServerIP { get; set; }
+        public int connectPort { get; set; }
 
         private int hostId;
         private int webHostId;
@@ -31,34 +33,31 @@ namespace Assets.Scripts.ServerClient
 
         private float connectionTime;
         private bool isConnected = false;
-        private bool isStarted = false;
         private byte error;
         private GameScrean game;
 
+        private GameObject itemsCaller;
+
         private string playerName;
+
         public Text errorMsg;
 
-        public List<Player> players = new List<Player>();
+        //public List<Player> players = new List<Player>();
 
         void Start()
         {
             errorMsg.text = "Server unavailable ";
-            NetworkTransport.Init();
-            ConnectionConfig cc = new ConnectionConfig();
-
-            reliableChannel = cc.AddChannel(QosType.Reliable);
-            unreliableChannel = cc.AddChannel(QosType.Unreliable);
-
-            HostTopology topo = new HostTopology(cc, MAX_CONNECTION);
-
-            hostId = NetworkTransport.AddHost(topo, 0);
-
-            connectionId = NetworkTransport.Connect(hostId, "127.0.0.1", port, 0, out error);
-            connectionTime = Time.time;
-            isConnected = true;
+            OnConnect();
         }
+        void OnApplicationQuit()
+        {
+            NetworkTransport.Shutdown();
+            Destroy(gameObject);
+        }
+
         private void OnConnect()
         {
+
             NetworkTransport.Init();
             ConnectionConfig cc = new ConnectionConfig();
 
@@ -69,7 +68,7 @@ namespace Assets.Scripts.ServerClient
 
             hostId = NetworkTransport.AddHost(topo, 0);
 
-            connectionId = NetworkTransport.Connect(hostId, "127.0.0.1", port, 0, out error);
+            connectionId = NetworkTransport.Connect(hostId, ipAdress, port, 0, out error);
             connectionTime = Time.time;
             isConnected = true;
         }
@@ -95,27 +94,40 @@ namespace Assets.Scripts.ServerClient
             OnAskLogIn(pname, pass);
         }
 
+        internal void GetCharItems(string playerName, GameObject playerItems)
+        {
+            itemsCaller = playerItems;
+            string msg = "GETCHARITEMS|" + playerName;
+
+            Send(msg, reliableChannel);
+        }
+
+        internal void CreateGame(string networkId)
+        {
+            string msg = "CREATEGAME|" + networkId;
+            Send(msg, reliableChannel);
+        }
+
         private void Update()
         {
             if (!isConnected)
                 return;
-            int recHostId;
             int connectionId;
             int channelId;
             byte[] recBuffer = new byte[1024];
             int bufferSize = 1024;
             int dataSize;
             byte error;
-            NetworkEventType recData = NetworkTransport.Receive(out recHostId, out connectionId, out channelId, recBuffer, bufferSize, out dataSize, out error);
+            NetworkEventType recData = NetworkTransport.ReceiveFromHost(hostId, out connectionId, out channelId, recBuffer, bufferSize, out dataSize, out error);
 
             switch (recData)
             {
                 case NetworkEventType.DataEvent:
                     string msg = Encoding.Unicode.GetString(recBuffer, 0, dataSize);
-                    Debug.Log(msg);
+                    
                     errorMsg.text = "";
                     string[] splitData = msg.Split('|');
-                    Debug.Log(splitData[0]);
+                    Debug.Log(msg);
                     switch (splitData[0])
                     {
                         case "ASKLOGIN":
@@ -128,12 +140,39 @@ namespace Assets.Scripts.ServerClient
                         case "CNN":
                             LogIn(int.Parse(splitData[1]));
                             break;
+                        case "YES":
+                            GameObject.Find("MainCanvas").GetComponent<MainCanvas>().ToRegister(true);
+                            break;
                         case "CHARINFO":
                             game = GameObject.Find("GameScrean").GetComponent<GameScrean>();
                             game.SetCharacters(splitData);
                             break;
                         case "UNITSINUSE":
                             game.SetPlayerUnits(splitData.Skip(1).ToArray());
+                            break;
+                        case "METCHENDOK":
+                            OnSetProgress(int.Parse(splitData[1]), int.Parse(splitData[2]), int.Parse(splitData[3]));
+                            break;
+                        case "METCHENDUNITOK":
+                            OnSetUnitProgress(int.Parse(splitData[1]), int.Parse(splitData[2]), int.Parse(splitData[3]), int.Parse(splitData[4]));
+                            break;
+                        case "INUSEITEMCHAR":
+                            if (itemsCaller != null)
+                                itemsCaller.GetComponent<Scripts.Player.Player.PlayerController>().SetPlayerItems(splitData.Skip(1).ToArray());
+                            break;
+                        case "UPGRADE":
+                            if (itemsCaller != null)
+                                itemsCaller.GetComponent<Scripts.Player.Player.PlayerController>().UpgradePlayerItem(int.Parse(splitData[2]),int.Parse(splitData[3]));
+                            break;
+                        case "UPDATESTATS":
+                            if (itemsCaller != null)
+                                itemsCaller.GetComponent<Scripts.Player.Player.PlayerController>().UpdatePlayerStats(int.Parse(splitData[1]), int.Parse(splitData[2]), int.Parse(splitData[3]));
+                            break;
+                        case "CREATEUNIT":
+                            game.CreateUnit(splitData.Skip(1).ToArray());
+                            break;
+                        case "ACTIVEMATCH":
+                            game.SetGameList(splitData.Skip(1).ToList());
                             break;
                         default:
                             Debug.Log("Invalid message : " + msg);
@@ -149,6 +188,54 @@ namespace Assets.Scripts.ServerClient
             }
 
         }
+
+        internal void SetSlot(int id, int pos)
+        {
+            string msg = "UPDATESLOT|" + id + "|" + pos;
+            Send(msg, reliableChannel);
+        }
+
+        internal void OnRemoveGame()
+        {
+            string msg = "REMOVEMATCH";
+
+            Send(msg, reliableChannel);
+        }
+
+        public void CreateUnit(string name, string playerName, int price)
+        {
+            string msg = "CREATEUNIT|" + name + "|" + playerName + "|" + price;
+            Send(msg, reliableChannel);
+        }
+
+        public void DeleteUnit(int id)
+        {
+            string msg = "DELETEUNIT|" + id;
+            Send(msg, reliableChannel);
+        }
+
+        internal void SetStats(string name)
+        {
+            string msg = "UPGRADESTAT|"+name;
+            Send(msg, reliableChannel);
+        }
+
+        private void OnSetUnitProgress(int progress, int level, int slot, int id)
+        {
+            GameObject.Find("ClickControler").GetComponent<InputController>().BackToMainUnit(progress, level, slot, id);
+        }
+
+        internal void GetGameList()
+        {
+            string msg = "GAMESLIST|";
+            Send(msg, reliableChannel);
+        }
+
+        private void OnSetProgress(int progress, int gold, int level)
+        {
+            GameObject.Find("ClickControler").GetComponent<InputController>().BackToMain(progress, level, gold);
+        }
+
         internal void GetCharInUseUnits(string charName)
         {
             string msg = "GETINUSEUNITS|";
@@ -167,7 +254,7 @@ namespace Assets.Scripts.ServerClient
         private void LogIn(int cnnId)
         {
             ourClientId = cnnId;
-            isStarted = true;
+            Destroy(GameObject.Find("GameScrean"));
             SceneManager.LoadScene("GameScrean", LoadSceneMode.Single);
         }
 
@@ -201,6 +288,13 @@ namespace Assets.Scripts.ServerClient
             SendPassword(email);
         }
 
+        public void UpgradeItem(int code, string playerName, int gold)
+        {
+            string msg = "UPGRADEITEM|" + code + "|" + playerName+"|"+gold;
+
+            Send(msg, reliableChannel);
+        }
+
         public void OnRegister()
         {
             string username = GameObject.Find("RegUsernameInput").GetComponent<InputField>().text;
@@ -219,10 +313,21 @@ namespace Assets.Scripts.ServerClient
             playerName = username;
             Register(username, password, email);
         }
+
+        internal void SaveProgress(int progress, int level, int gold, bool bar)
+        {
+            string msg = "SETPROGRESS|"+progress+"|"+level+"|"+gold+"|"+bar;
+            Send(msg, reliableChannel);
+        }
+
+        internal void SaveUnitProgress(int progress, int level, int pos)
+        {
+            string msg = "SETUNITPROGRESS|" + progress + "|" + level + "|" + pos;
+            Send(msg, reliableChannel);
+        }
+
         private void Register(string username, string password, string email)
         {
-            UTF8Encoding ue = new UTF8Encoding();
-            MD5CryptoServiceProvider md5 = new MD5CryptoServiceProvider();
             string msg = "REGISTER|";
 
             msg += username + "|" + password + "|" + email;
@@ -231,21 +336,16 @@ namespace Assets.Scripts.ServerClient
 
         private void SendPassword(string email)
         {
-            UTF8Encoding ue = new UTF8Encoding();
-            MD5CryptoServiceProvider md5 = new MD5CryptoServiceProvider();
             string msg = "SENDPASS|" + email;
             Send(msg, reliableChannel);
         }
 
         private void OnAskLogIn(string username, string password)
         {
-            UTF8Encoding ue = new UTF8Encoding();
-            MD5CryptoServiceProvider md5 = new MD5CryptoServiceProvider();
             string msg = "LOGIN|";
             msg += username + "|";
             msg += password;
             Send(msg, reliableChannel);
-            Debug.Log(msg);
         }
 
         private void Send(string mess, int chennelId)
